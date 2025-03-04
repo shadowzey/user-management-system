@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录</title>
+    <!-- 使用本地静态资源 -->
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/all.min.css" rel="stylesheet">
+    <link href="/css/common.css" rel="stylesheet">
+    <style>
+        .login-form {
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="login-form container-card">
+            <h2 class="card-header">用户登录</h2>
+            
+            <div id="error-message" class="alert alert-danger d-none" role="alert"></div>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username">用户名</label>
+                    <input type="text" class="form-control" id="username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">密码</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">登录</button>
+            </form>
+            
+            <div class="links">
+                <a href="/forgot-password">忘记密码?</a>
+                <a href="/signup">注册账号</a>
+            </div>
+            
+            <div class="social-login mt-4">
+                <hr>
+                <p class="text-center">或使用以下方式登录</p>
+                <div class="d-grid gap-2">
+                    <a href="/oauth2/authorization/github" class="btn btn-dark">
+                        <i class="fab fa-github"></i> 使用GitHub登录
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 使用本地JavaScript库 -->
+    <script src="/js/jquery.min.js"></script>
+    <script src="/js/auth.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const errorMessage = document.getElementById('error-message');
+            const loginForm = document.getElementById('login-form');
+            
+            loginForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                
+                // 发送登录请求
+                fetch('/api/auth/signin', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password
+                    })
+                })
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    return response.json().then(data => {
+                        console.log('Response data:', data);
+                        return { status: response.status, data: data };
+                    });
+                })
+                .then(result => {
+                    if (result.data.accessToken) {
+                        // 登录成功，保存令牌
+                        console.log('Login successful, token:', result.data.accessToken);
+                        
+                        // 使用Cookie存储令牌，而不是localStorage
+                        const setCookie = function(name, value, days) {
+                            const date = new Date();
+                            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                            const expires = "expires=" + date.toUTCString();
+                            document.cookie = name + "=" + value + ";" + expires + ";path=/";
+                            console.log(`Cookie set: ${name}=${value.substring(0, 20)}... expires=${expires}`);
+                        };
+                        
+                        // 先检查服务器设置的Cookie
+                        console.log('Cookies after login response:', document.cookie);
+                        
+                        // 在客户端设置JWT Cookie
+                        console.log('Setting JWT cookie on client side');
+                        setCookie('jwt', result.data.accessToken, 7); // 存储7天
+                        
+                        // 不再设置复杂的user cookie，避免编码问题
+                        
+                        // 跳转到首页
+                        window.location.href = '/';
+                    } else {
+                        // 登录失败
+                        console.error('Login failed:', result.data);
+                        errorMessage.textContent = result.data.message || '登录失败';
+                        errorMessage.classList.remove('d-none');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error during login:', error);
+                    errorMessage.textContent = '登录时出错: ' + error.message;
+                    errorMessage.classList.remove('d-none');
+                });
+            });
+        });
+    </script>
+</body>
+</html>

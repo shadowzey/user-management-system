@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人信息 - 用户管理系统</title>
+    <!-- 使用本地静态资源 -->
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/common.css" rel="stylesheet">
+    <style>
+        .profile-container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+        .profile-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .btn-update {
+            width: 100%;
+            margin-top: 20px;
+        }
+        .alert {
+            display: none;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="profile-container">
+            <div class="profile-header">
+                <h2>个人信息</h2>
+                <p>查看和更新您的个人信息</p>
+            </div>
+            
+            <div class="alert alert-success" id="successAlert" role="alert">
+                个人信息更新成功！
+            </div>
+            
+            <div class="alert alert-danger" id="errorAlert" role="alert">
+                个人信息更新失败，请稍后重试。
+            </div>
+            
+            <form id="profileForm">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="username">用户名</label>
+                            <input type="text" class="form-control" id="username" readonly>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="email">电子邮箱</label>
+                            <input type="email" class="form-control" id="email" readonly>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="realName">真实姓名</label>
+                            <input type="text" class="form-control" id="realName" name="realName">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="phoneNumber">手机号码</label>
+                            <input type="text" class="form-control" id="phoneNumber" name="phoneNumber" pattern="^$|^\d{11}$" title="手机号码必须为11位数字">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="address">地址</label>
+                    <input type="text" class="form-control" id="address" name="address">
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="city">城市</label>
+                            <input type="text" class="form-control" id="city" name="city">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="postalCode">邮政编码</label>
+                            <input type="text" class="form-control" id="postalCode" name="postalCode">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="country">国家</label>
+                    <input type="text" class="form-control" id="country" name="country">
+                </div>
+                
+                <div class="form-group">
+                    <label for="bio">个人简介</label>
+                    <textarea class="form-control" id="bio" name="bio" rows="3"></textarea>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-update">更新个人信息</button>
+            </form>
+            
+            <div class="mt-4 text-center">
+                <a href="/" class="btn btn-outline-secondary">返回首页</a>
+                <button id="logoutBtn" class="btn btn-outline-danger ms-2">退出登录</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 使用本地JavaScript库 -->
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery.min.js"></script>
+    <script src="/js/auth.js"></script>
+    <script>
+        // 调试信息
+        console.log('个人资料页面加载');
+        console.log('localStorage中的token:', localStorage.getItem('token'));
+        console.log('localStorage中的user:', localStorage.getItem('user'));
+        console.log('Cookie中的jwt:', getCookie('jwt'));
+        
+        // 强制检查一次登录状态，确保从 Cookie 中获取令牌
+        checkAuth();
+        
+        // 获取用户个人信息
+        async function fetchUserProfile() {
+            console.log('开始获取用户信息');
+            
+            if (!checkAuth()) {
+                console.error('用户未登录，无法获取信息');
+                window.location.href = '/login';
+                return;
+            }
+            
+            const token = localStorage.getItem('token');
+            console.log('使用token获取用户信息:', token);
+            
+            try {
+                const response = await fetch('/api/user/profile', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+                
+                console.log('获取用户信息响应状态:', response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('获取到的用户数据:', data);
+                    
+                    // 填充表单
+                    document.getElementById('username').value = data.username;
+                    document.getElementById('email').value = data.email;
+                    document.getElementById('realName').value = data.realName || '';
+                    document.getElementById('phoneNumber').value = data.phoneNumber || '';
+                    document.getElementById('address').value = data.address || '';
+                    document.getElementById('city').value = data.city || '';
+                    document.getElementById('postalCode').value = data.postalCode || '';
+                    document.getElementById('country').value = data.country || '';
+                    document.getElementById('bio').value = data.bio || '';
+                    
+                    // 显示OAuth2信息（如果有）
+                    if (data.oauthProvider) {
+                        console.log('用户使用OAuth2登录，提供商:', data.oauthProvider);
+                        // 如果页面上有显示OAuth2信息的元素，可以在这里显示
+                    }
+                } else {
+                    // 如果获取失败（如token过期），重定向到登录页面
+                    console.error('获取用户信息失败，状态码:', response.status);
+                    localStorage.removeItem('token');
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('获取用户信息失败:', error);
+                document.getElementById('errorAlert').textContent = '获取用户信息失败，请刷新页面重试。';
+                document.getElementById('errorAlert').style.display = 'block';
+            }
+        }
+        
+        // 更新用户个人信息
+        async function updateUserProfile(event) {
+            event.preventDefault();
+            if (!checkAuth()) return;
+            
+            const formData = {
+                realName: document.getElementById('realName').value,
+                phoneNumber: document.getElementById('phoneNumber').value,
+                address: document.getElementById('address').value,
+                city: document.getElementById('city').value,
+                postalCode: document.getElementById('postalCode').value,
+                country: document.getElementById('country').value,
+                bio: document.getElementById('bio').value
+            };
+            
+            try {
+                const response = await fetch('/api/user/profile', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (response.ok) {
+                    document.getElementById('successAlert').style.display = 'block';
+                    document.getElementById('errorAlert').style.display = 'none';
+                    
+                    // 3秒后隐藏成功提示
+                    setTimeout(() => {
+                        document.getElementById('successAlert').style.display = 'none';
+                    }, 3000);
+                } else {
+                    const errorData = await response.json();
+                    document.getElementById('errorAlert').textContent = errorData.message || '个人信息更新失败，请稍后重试。';
+                    document.getElementById('errorAlert').style.display = 'block';
+                    document.getElementById('successAlert').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('更新用户信息失败:', error);
+                document.getElementById('errorAlert').textContent = '更新用户信息失败，请稍后重试。';
+                document.getElementById('errorAlert').style.display = 'block';
+                document.getElementById('successAlert').style.display = 'none';
+            }
+        }
+        
+        // 退出登录
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+        
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 获取用户个人信息
+            fetchUserProfile();
+            
+            // 表单提交事件
+            document.getElementById('profileForm').addEventListener('submit', updateUserProfile);
+            
+            // 退出登录按钮点击事件
+            document.getElementById('logoutBtn').addEventListener('click', logout);
+        });
+    </script>
+</body>
+</html>

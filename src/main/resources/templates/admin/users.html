@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理 - 用户管理系统</title>
+    <!-- 使用本地静态资源 -->
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/all.min.css" rel="stylesheet">
+    <link href="/css/common.css" rel="stylesheet">
+    <link href="/css/admin.css" rel="stylesheet">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- 侧边栏 -->
+        <div class="admin-sidebar">
+            <div class="site-title">
+                <h4>用户管理系统</h4>
+            </div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>控制面板</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/users">
+                        <i class="fas fa-users"></i>
+                        <span>用户管理</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/logs">
+                        <i class="fas fa-history"></i>
+                        <span>操作日志</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/">
+                        <i class="fas fa-home"></i>
+                        <span>返回首页</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#" id="adminLogoutBtn">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>退出登录</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <!-- 主内容区 -->
+        <div class="admin-content">
+            <div class="admin-header">
+                <h2 class="admin-title">用户管理</h2>
+                <div class="user-info">
+                    <span id="adminUsername"></span>
+                </div>
+            </div>
+            
+            <!-- 搜索和过滤 -->
+            <div class="admin-card mb-4">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchInput" placeholder="搜索用户名或邮箱">
+                            <button class="btn btn-primary" id="searchBtn">
+                                <i class="fas fa-search"></i> 搜索
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <div class="btn-group">
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="filterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                状态筛选
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="filterDropdown">
+                                <li><a class="dropdown-item" href="#" data-filter="all">全部用户</a></li>
+                                <li><a class="dropdown-item" href="#" data-filter="active">活跃用户</a></li>
+                                <li><a class="dropdown-item" href="#" data-filter="inactive">禁用用户</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 用户列表 -->
+            <div class="admin-card">
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>用户名</th>
+                                <th>邮箱</th>
+                                <th>真实姓名</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTable">
+                            <tr>
+                                <td colspan="6" class="text-center">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- 分页 -->
+                <div class="admin-pagination mt-4">
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination" id="pagination">
+                            <!-- 分页内容将由JavaScript动态生成 -->
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 确认删除模态框 -->
+    <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteConfirmModalLabel">确认删除</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>您确定要删除用户 <span id="deleteUserName"></span> 吗？此操作不可撤销。</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">确认删除</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 使用本地JavaScript库 -->
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery.min.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/admin.js"></script>
+    <script>
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 检查管理员权限
+            if (!await checkAdminAuth()) return;
+            
+            // 显示管理员用户名
+            const userData = await getCurrentUser();
+            if (userData) {
+                document.getElementById('adminUsername').textContent = userData.username;
+            }
+            
+            // 当前页码和筛选条件
+            let currentPage = 0;
+            let pageSize = 10;
+            let sortBy = 'id';
+            let direction = 'asc';
+            let filter = 'all';
+            let searchTerm = '';
+            
+            // 加载用户列表
+            async function loadUsers() {
+                const usersData = await fetchUsers(currentPage, pageSize, sortBy, direction);
+                if (!usersData) return;
+                
+                // 根据筛选条件过滤用户
+                let filteredUsers = usersData.users;
+                if (filter === 'active') {
+                    filteredUsers = filteredUsers.filter(user => user.enabled);
+                } else if (filter === 'inactive') {
+                    filteredUsers = filteredUsers.filter(user => !user.enabled);
+                }
+                
+                // 根据搜索词过滤用户
+                if (searchTerm) {
+                    const term = searchTerm.toLowerCase();
+                    filteredUsers = filteredUsers.filter(user => 
+                        user.username.toLowerCase().includes(term) || 
+                        user.email.toLowerCase().includes(term) ||
+                        (user.realName && user.realName.toLowerCase().includes(term))
+                    );
+                }
+                
+                // 生成用户列表HTML
+                if (filteredUsers.length > 0) {
+                    const usersHtml = filteredUsers.map(user => {
+                        // 添加调试日志
+                        console.log(`渲染用户行: ${user.username}, 状态: ${user.enabled}`);
+                        
+                        // 确保 enabled 是布尔值
+                        const isEnabled = user.enabled === true || user.enabled === 'true';
+                        
+                        return `
+                        <tr>
+                            <td>${user.id}</td>
+                            <td>${user.username}</td>
+                            <td>${user.email}</td>
+                            <td>${user.realName || '-'}</td>
+                            <td>
+                                <span class="user-status-badge ${isEnabled ? 'status-active' : 'status-inactive'}">
+                                    ${isEnabled ? '启用' : '禁用'}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <a href="/admin/users/edit/${user.id}" class="btn btn-sm btn-primary" title="编辑用户">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-${isEnabled ? 'warning' : 'success'} toggle-status-btn" 
+                                            data-id="${user.id}" 
+                                            data-status="${isEnabled ? 'disable' : 'enable'}"
+                                            title="${isEnabled ? '禁用用户' : '启用用户'}">
+                                        <i class="fas fa-${isEnabled ? 'ban' : 'check'}"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger delete-user-btn" 
+                                            data-id="${user.id}" 
+                                            data-username="${user.username}"
+                                            title="删除用户">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        `;
+                    }).join('');
+                    
+                    document.getElementById('usersTable').innerHTML = usersHtml;
+                } else {
+                    document.getElementById('usersTable').innerHTML = '<tr><td colspan="6" class="text-center">没有找到用户</td></tr>';
+                }
+                
+                // 生成分页HTML
+                const totalPages = usersData.totalPages;
+                let paginationHtml = '';
+                
+                // 上一页按钮
+                paginationHtml += `
+                    <li class="page-item ${currentPage === 0 ? 'disabled' : ''}">
+                        <a class="page-link" href="#" data-page="${currentPage - 1}" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                `;
+                
+                // 页码按钮
+                for (let i = 0; i < totalPages; i++) {
+                    paginationHtml += `
+                        <li class="page-item ${currentPage === i ? 'active' : ''}">
+                            <a class="page-link" href="#" data-page="${i}">${i + 1}</a>
+                        </li>
+                    `;
+                }
+                
+                // 下一页按钮
+                paginationHtml += `
+                    <li class="page-item ${currentPage === totalPages - 1 ? 'disabled' : ''}">
+                        <a class="page-link" href="#" data-page="${currentPage + 1}" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                `;
+                
+                document.getElementById('pagination').innerHTML = paginationHtml;
+                
+                // 添加分页点击事件
+                document.querySelectorAll('#pagination .page-link').forEach(link => {
+                    link.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const page = parseInt(this.getAttribute('data-page'));
+                        if (page >= 0 && page < totalPages) {
+                            currentPage = page;
+                            loadUsers();
+                        }
+                    });
+                });
+                
+                // 添加状态切换按钮事件
+                document.querySelectorAll('.toggle-status-btn').forEach(btn => {
+                    btn.addEventListener('click', async function() {
+                        const userId = this.getAttribute('data-id');
+                        const action = this.getAttribute('data-status');
+                        const enabled = action === 'enable';
+                        
+                        if (await updateUserStatus(userId, enabled)) {
+                            // 重新加载用户列表
+                            loadUsers();
+                        }
+                    });
+                });
+                
+                // 添加删除按钮事件
+                document.querySelectorAll('.delete-user-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const userId = this.getAttribute('data-id');
+                        const username = this.getAttribute('data-username');
+                        
+                        // 显示确认删除模态框
+                        document.getElementById('deleteUserName').textContent = username;
+                        document.getElementById('confirmDeleteBtn').setAttribute('data-id', userId);
+                        
+                        const deleteModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+                        deleteModal.show();
+                    });
+                });
+            }
+            
+            // 初始加载用户列表
+            loadUsers();
+            
+            // 确认删除按钮事件
+            document.getElementById('confirmDeleteBtn').addEventListener('click', async function() {
+                const userId = this.getAttribute('data-id');
+                
+                if (await deleteUser(userId)) {
+                    // 关闭模态框
+                    const deleteModal = bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal'));
+                    deleteModal.hide();
+                    
+                    // 重新加载用户列表
+                    loadUsers();
+                }
+            });
+            
+            // 搜索按钮事件
+            document.getElementById('searchBtn').addEventListener('click', function() {
+                searchTerm = document.getElementById('searchInput').value.trim();
+                currentPage = 0; // 重置为第一页
+                loadUsers();
+            });
+            
+            // 搜索输入框回车事件
+            document.getElementById('searchInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchTerm = this.value.trim();
+                    currentPage = 0; // 重置为第一页
+                    loadUsers();
+                }
+            });
+            
+            // 状态筛选事件
+            document.querySelectorAll('[data-filter]').forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    filter = this.getAttribute('data-filter');
+                    currentPage = 0; // 重置为第一页
+                    
+                    // 更新筛选按钮文本
+                    const filterText = this.textContent;
+                    document.getElementById('filterDropdown').textContent = filterText;
+                    
+                    loadUsers();
+                });
+            });
+            
+            // 退出登录按钮
+            document.getElementById('adminLogoutBtn').addEventListener('click', function(e) {
+                e.preventDefault();
+                logout();
+            });
+        });
+    </script>
+</body>
+</html>

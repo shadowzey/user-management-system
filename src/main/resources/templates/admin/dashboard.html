@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 用户管理系统</title>
+    <!-- 使用本地静态资源 -->
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/all.min.css" rel="stylesheet">
+    <link href="/css/common.css" rel="stylesheet">
+    <link href="/css/admin.css" rel="stylesheet">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- 侧边栏 -->
+        <div class="admin-sidebar">
+            <div class="site-title">
+                <h4>用户管理系统</h4>
+            </div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>控制面板</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/users">
+                        <i class="fas fa-users"></i>
+                        <span>用户管理</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/logs">
+                        <i class="fas fa-history"></i>
+                        <span>操作日志</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/">
+                        <i class="fas fa-home"></i>
+                        <span>返回首页</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#" id="adminLogoutBtn">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>退出登录</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <!-- 主内容区 -->
+        <div class="admin-content">
+            <div class="admin-header">
+                <h2 class="admin-title">控制面板</h2>
+                <div class="user-info">
+                    <span id="adminUsername"></span>
+                </div>
+            </div>
+            
+            <!-- 数据卡片 -->
+            <div class="admin-dashboard-cards">
+                <div class="dashboard-card">
+                    <div class="dashboard-card-icon" style="background-color: #007bff;">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="dashboard-card-title">总用户数</div>
+                    <div class="dashboard-card-value" id="totalUsers">--</div>
+                </div>
+                
+                <div class="dashboard-card">
+                    <div class="dashboard-card-icon" style="background-color: #28a745;">
+                        <i class="fas fa-user-check"></i>
+                    </div>
+                    <div class="dashboard-card-title">活跃用户</div>
+                    <div class="dashboard-card-value" id="activeUsers">--</div>
+                </div>
+                
+                <div class="dashboard-card">
+                    <div class="dashboard-card-icon" style="background-color: #dc3545;">
+                        <i class="fas fa-user-times"></i>
+                    </div>
+                    <div class="dashboard-card-title">禁用用户</div>
+                    <div class="dashboard-card-value" id="inactiveUsers">--</div>
+                </div>
+            </div>
+            
+            <!-- 最近活动 -->
+            <div class="admin-card">
+                <h4 class="mb-4">最近活动</h4>
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>用户</th>
+                                <th>操作</th>
+                                <th>IP地址</th>
+                                <th>状态</th>
+                                <th>时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentLogsTable">
+                            <tr>
+                                <td colspan="5" class="text-center">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- 最新用户 -->
+            <div class="admin-card">
+                <h4 class="mb-4">最新用户</h4>
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>用户名</th>
+                                <th>邮箱</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentUsersTable">
+                            <tr>
+                                <td colspan="5" class="text-center">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 使用本地JavaScript库 -->
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery.min.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/admin.js"></script>
+    <script>
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 检查管理员权限
+            if (!await checkAdminAuth()) return;
+            
+            // 显示管理员用户名
+            const userData = await getCurrentUser();
+            if (userData) {
+                document.getElementById('adminUsername').textContent = userData.username;
+            }
+            
+            // 获取用户统计数据
+            const usersData = await fetchUsers(0, 1000);
+            if (usersData) {
+                const totalUsers = usersData.totalItems;
+                document.getElementById('totalUsers').textContent = totalUsers;
+                
+                const activeUsers = usersData.users.filter(user => user.enabled).length;
+                document.getElementById('activeUsers').textContent = activeUsers;
+                
+                const inactiveUsers = totalUsers - activeUsers;
+                document.getElementById('inactiveUsers').textContent = inactiveUsers;
+            }
+            
+            // 获取最近活动
+            const recentLogsData = await fetchUserLogs(null, null, null, null, 7);
+            console.log('最近活动数据:', recentLogsData);
+            
+            // 使用admin.js中的formatDateTime函数
+            
+            if (recentLogsData && recentLogsData.logs && recentLogsData.logs.length > 0) {
+                const logsHtml = recentLogsData.logs.slice(0, 5).map(log => `
+                    <tr>
+                        <td>${log.username || '-'}</td>
+                        <td>${log.action}</td>
+                        <td>${log.ipAddress}</td>
+                        <td>
+                            <span class="user-status-badge ${log.status === 'SUCCESS' ? 'status-active' : 'status-inactive'}">
+                                ${log.status}
+                            </span>
+                        </td>
+                        <td>${formatDateTime(log.timestamp)}</td>
+                    </tr>
+                `).join('');
+                
+                document.getElementById('recentLogsTable').innerHTML = logsHtml;
+            } else {
+                document.getElementById('recentLogsTable').innerHTML = '<tr><td colspan="5" class="text-center">暂无数据</td></tr>';
+            }
+            
+            // 获取最新用户
+            if (usersData && usersData.users.length > 0) {
+                const usersHtml = usersData.users.slice(0, 5).map(user => `
+                    <tr>
+                        <td>${user.id}</td>
+                        <td>${user.username}</td>
+                        <td>${user.email}</td>
+                        <td>
+                            <span class="user-status-badge ${user.enabled ? 'status-active' : 'status-inactive'}">
+                                ${user.enabled ? '启用' : '禁用'}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                <a href="/admin/users?id=${user.id}" class="btn btn-sm btn-primary">查看</a>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                document.getElementById('recentUsersTable').innerHTML = usersHtml;
+            } else {
+                document.getElementById('recentUsersTable').innerHTML = '<tr><td colspan="5" class="text-center">暂无数据</td></tr>';
+            }
+            
+            // 退出登录按钮
+            document.getElementById('adminLogoutBtn').addEventListener('click', function(e) {
+                e.preventDefault();
+                logout();
+            });
+        });
+    </script>
+</body>
+</html>

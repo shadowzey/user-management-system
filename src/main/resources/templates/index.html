@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首页 - 用户管理系统</title>
+    <!-- 使用本地静态资源 -->
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/common.css" rel="stylesheet">
+    <style>
+        .home-container {
+            max-width: 800px;
+            margin: 100px auto;
+            text-align: center;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+        .welcome-message {
+            margin-bottom: 30px;
+        }
+        .action-buttons {
+            margin-top: 40px;
+        }
+        .action-buttons .btn {
+            margin: 0 10px;
+            padding: 10px 20px;
+        }
+        .user-info {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="home-container">
+            <div class="welcome-message">
+                <h1>欢迎使用用户管理系统</h1>
+                <p class="lead">一个安全、高效的用户管理解决方案</p>
+            </div>
+            
+            <!-- 未登录时显示 -->
+            <div id="guestContent">
+                <p>请登录或注册以使用系统功能</p>
+                <div class="action-buttons">
+                    <a href="/login" class="btn btn-primary">登录</a>
+                    <a href="/signup" class="btn btn-outline-primary">注册</a>
+                </div>
+            </div>
+            
+            <!-- 登录后显示 -->
+            <div id="userContent" style="display: none;">
+                <div class="user-info">
+                    <h4>欢迎回来，<span id="usernameDisplay"></span>！</h4>
+                    <p>您可以管理您的个人信息或更改密码。</p>
+                </div>
+                <div class="action-buttons">
+                    <a href="/profile" class="btn btn-primary">个人信息</a>
+                    <a href="/forgot-password" class="btn btn-outline-secondary">修改密码</a>
+                    <!-- 管理员入口，只对管理员显示 -->
+                    <a href="/admin" id="adminLink" class="btn btn-warning" style="display: none;">管理后台</a>
+                    <button id="logoutBtn" class="btn btn-outline-danger">退出登录</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 使用本地JavaScript库 -->
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery.min.js"></script>
+    <script src="/js/auth.js"></script>
+    <script>
+        // 检查用户是否已登录并显示相应内容
+        async function checkAuthAndDisplay() {
+            // 从 Cookie 中获取指定名称的值
+            function getCookie(name) {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.startsWith(name + '=')) {
+                        return cookie.substring(name.length + 1);
+                    }
+                }
+                return null;
+            }
+            
+            // 显示所有Cookie信息
+            console.log('All cookies:', document.cookie);
+            
+            let token = getCookie('jwt');
+            console.log('JWT token from cookie:', token ? '存在' : '不存在');
+            if (token) {
+                console.log('JWT token value:', token);
+            }
+            
+            // 如果没有JWT令牌，再次检查，因为可能刚刚在页面加载时设置了令牌
+            if (!token) {
+                token = getCookie('jwt');
+                console.log('Re-checking JWT token from cookie:', token ? '存在' : '不存在');
+            }
+            
+            if (!token) {
+                document.getElementById('guestContent').style.display = 'block';
+                document.getElementById('userContent').style.display = 'none';
+                return false;
+            }
+            
+            try {
+                // 使用通用方法获取用户信息
+                // 不再从Cookie中获取用户信息，直接从服务器获取
+                let userData = null;
+                
+                if (token) {
+                    // 如果有token，从服务器获取用户信息
+                    try {
+                        console.log('Fetching user profile with token:', token.substring(0, 20) + '...');
+                        const response = await fetch('/api/user/profile', {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': 'Bearer ' + token
+                            }
+                        });
+                        console.log('Profile response status:', response.status);
+                        
+                        if (response.ok) {
+                            userData = await response.json();
+                            // 将用户数据存储在Cookie中
+                            document.cookie = `user=${JSON.stringify(userData)};path=/;max-age=${7*24*60*60}`;
+                            console.log('User data fetched from server:', userData);
+                        }
+                    } catch (error) {
+                        console.error('Error fetching user data:', error);
+                    }
+                }
+                
+                if (userData) {
+                    // 显示用户信息
+                    document.getElementById('usernameDisplay').textContent = userData.username;
+                    document.getElementById('guestContent').style.display = 'none';
+                    document.getElementById('userContent').style.display = 'block';
+                    
+                    // 调试信息
+                    console.log('User data:', userData);
+                    console.log('User roles:', userData.roles);
+                    console.log('Is admin check:', isAdmin());
+                    
+                    // 检查是否为管理员，如果是则显示管理后台入口
+                    if (isAdmin()) {
+                        console.log('User is admin, showing admin link');
+                        document.getElementById('adminLink').style.display = 'inline-block';
+                    } else {
+                        console.log('User is not admin, hiding admin link');
+                        document.getElementById('adminLink').style.display = 'none';
+                    }
+                    
+                    return true;
+                } else {
+                    document.getElementById('guestContent').style.display = 'block';
+                    document.getElementById('userContent').style.display = 'none';
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('guestContent').style.display = 'block';
+                document.getElementById('userContent').style.display = 'none';
+                return false;
+            }
+        }
+        
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 直接检查所有Cookie
+            console.log('Document cookies on page load:', document.cookie);
+            
+            // 直接解析Cookie
+            function parseCookies() {
+                const cookiesObj = {};
+                const cookiesArr = document.cookie.split(';');
+                
+                for (let i = 0; i < cookiesArr.length; i++) {
+                    const cookiePair = cookiesArr[i].trim().split('=');
+                    if (cookiePair.length === 2) {
+                        const name = cookiePair[0];
+                        const value = cookiePair[1];
+                        cookiesObj[name] = value;
+                    }
+                }
+                
+                return cookiesObj;
+            }
+            
+            const cookies = parseCookies();
+            console.log('Parsed cookies:', cookies);
+            
+            // 如果没有jwt cookie，但有user cookie，尝试从user对象中提取JWT令牌
+            if (!cookies['jwt'] && cookies['user']) {
+                try {
+                    const userData = JSON.parse(decodeURIComponent(cookies['user']));
+                    console.log('Parsed user data:', userData);
+                    
+                    if (userData && userData.accessToken) {
+                        console.log('Found JWT token in user object:', userData.accessToken.substring(0, 20) + '...');
+                        // 将JWT令牌设置为单独的Cookie
+                        document.cookie = `jwt=${userData.accessToken};path=/;max-age=${24*60*60}`;
+                        console.log('Set JWT cookie from user object');
+                    }
+                } catch (e) {
+                    console.error('Error parsing user cookie:', e);
+                }
+            }
+            
+            // 检查用户登录状态并显示相应内容
+            checkAuthAndDisplay();
+            
+            // 退出登录按钮点击事件
+            document.getElementById('logoutBtn').addEventListener('click', logout);
+        });
+    </script>
+</body>
+</html>

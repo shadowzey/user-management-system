@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>操作日志 - 用户管理系统</title>
+    <!-- 使用本地静态资源 -->
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/all.min.css" rel="stylesheet">
+    <link href="/css/common.css" rel="stylesheet">
+    <link href="/css/admin.css" rel="stylesheet">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- 侧边栏 -->
+        <div class="admin-sidebar">
+            <div class="site-title">
+                <h4>用户管理系统</h4>
+            </div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>控制面板</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/users">
+                        <i class="fas fa-users"></i>
+                        <span>用户管理</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/logs">
+                        <i class="fas fa-history"></i>
+                        <span>操作日志</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/">
+                        <i class="fas fa-home"></i>
+                        <span>返回首页</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#" id="adminLogoutBtn">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>退出登录</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <!-- 主内容区 -->
+        <div class="admin-content">
+            <div class="admin-header">
+                <h2 class="admin-title">操作日志</h2>
+                <div class="user-info">
+                    <span id="adminUsername"></span>
+                </div>
+            </div>
+            
+            <!-- 搜索和过滤 -->
+            <div class="admin-card mb-4">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchInput" placeholder="搜索用户名或操作">
+                            <button class="btn btn-primary" id="searchBtn">
+                                <i class="fas fa-search"></i> 搜索
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <select class="form-select" id="actionFilter">
+                                    <option value="">所有操作类型</option>
+                                    <option value="LOGIN">登录</option>
+                                    <option value="LOGOUT">登出</option>
+                                    <option value="REGISTER">注册</option>
+                                    <option value="PASSWORD_RESET">重置密码</option>
+                                    <option value="PROFILE_UPDATE">更新资料</option>
+                                    <option value="USER_UPDATE">用户更新</option>
+                                    <option value="USER_DELETE">用户删除</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <select class="form-select" id="statusFilter">
+                                    <option value="">所有状态</option>
+                                    <option value="SUCCESS">成功</option>
+                                    <option value="FAILURE">失败</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-outline-secondary w-100" id="clearFiltersBtn">
+                                    <i class="fas fa-times"></i> 清除筛选
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 日志列表 -->
+            <div class="admin-card">
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>用户</th>
+                                <th>操作</th>
+                                <th>IP地址</th>
+                                <th>详情</th>
+                                <th>状态</th>
+                                <th>时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTable">
+                            <tr>
+                                <td colspan="7" class="text-center">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- 分页 -->
+                <div class="admin-pagination mt-4">
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination" id="pagination">
+                            <!-- 分页内容将由JavaScript动态生成 -->
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 使用本地JavaScript库 -->
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/jquery.min.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/admin.js"></script>
+    <script>
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 检查管理员权限
+            if (!await checkAdminAuth()) return;
+            
+            // 显示管理员用户名
+            const userData = await getCurrentUser();
+            if (userData) {
+                document.getElementById('adminUsername').textContent = userData.username;
+            }
+            
+            // 当前页码和筛选条件
+            let currentPage = 0;
+            let pageSize = 20;
+            let sortBy = 'timestamp';
+            let direction = 'desc';
+            let searchTerm = '';
+            let actionFilter = '';
+            let statusFilter = '';
+            
+            // 加载日志列表
+            async function loadLogs() {
+                const logsData = await fetchLogs(
+                    currentPage, 
+                    pageSize, 
+                    sortBy, 
+                    direction, 
+                    searchTerm, 
+                    actionFilter, 
+                    statusFilter
+                );
+                
+                if (!logsData) return;
+                
+                // 生成日志列表HTML
+                if (logsData.logs.length > 0) {
+                    const logsHtml = logsData.logs.map(log => `
+                        <tr>
+                            <td>${log.username || '-'}</td>
+                            <td>${log.action}</td>
+                            <td>${log.ipAddress}</td>
+                            <td>${log.details}</td>
+                            <td>
+                                <span class="user-status-badge ${log.status === 'SUCCESS' ? 'status-active' : 'status-inactive'}">
+                                    ${log.status}
+                                </span>
+                            </td>
+                            <td>${formatDateTime(log.timestamp)}</td>
+                        </tr>
+                    `).join('');
+                    
+                    document.getElementById('logsTable').innerHTML = logsHtml;
+                } else {
+                    document.getElementById('logsTable').innerHTML = '<tr><td colspan="7" class="text-center">没有找到日志记录</td></tr>';
+                }
+                
+                // 生成分页HTML
+                const totalPages = logsData.totalPages;
+                let paginationHtml = '';
+                
+                // 上一页按钮
+                paginationHtml += `
+                    <li class="page-item ${currentPage === 0 ? 'disabled' : ''}">
+                        <a class="page-link" href="#" data-page="${currentPage - 1}" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                `;
+                
+                // 页码按钮
+                for (let i = 0; i < totalPages; i++) {
+                    paginationHtml += `
+                        <li class="page-item ${currentPage === i ? 'active' : ''}">
+                            <a class="page-link" href="#" data-page="${i}">${i + 1}</a>
+                        </li>
+                    `;
+                }
+                
+                // 下一页按钮
+                paginationHtml += `
+                    <li class="page-item ${currentPage === totalPages - 1 ? 'disabled' : ''}">
+                        <a class="page-link" href="#" data-page="${currentPage + 1}" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                `;
+                
+                document.getElementById('pagination').innerHTML = paginationHtml;
+                
+                // 添加分页点击事件
+                document.querySelectorAll('#pagination .page-link').forEach(link => {
+                    link.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const page = parseInt(this.getAttribute('data-page'));
+                        if (page >= 0 && page < totalPages) {
+                            currentPage = page;
+                            loadLogs();
+                        }
+                    });
+                });
+            }
+            
+            // 初始加载日志列表
+            loadLogs();
+            
+            // 搜索按钮事件
+            document.getElementById('searchBtn').addEventListener('click', function() {
+                searchTerm = document.getElementById('searchInput').value.trim();
+                currentPage = 0; // 重置为第一页
+                loadLogs();
+            });
+            
+            // 搜索输入框回车事件
+            document.getElementById('searchInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchTerm = this.value.trim();
+                    currentPage = 0; // 重置为第一页
+                    loadLogs();
+                }
+            });
+            
+            // 操作类型筛选事件
+            document.getElementById('actionFilter').addEventListener('change', function() {
+                actionFilter = this.value;
+                currentPage = 0; // 重置为第一页
+                loadLogs();
+            });
+            
+            // 状态筛选事件
+            document.getElementById('statusFilter').addEventListener('change', function() {
+                statusFilter = this.value;
+                currentPage = 0; // 重置为第一页
+                loadLogs();
+            });
+            
+            // 清除筛选按钮事件
+            document.getElementById('clearFiltersBtn').addEventListener('click', function() {
+                document.getElementById('searchInput').value = '';
+                document.getElementById('actionFilter').value = '';
+                document.getElementById('statusFilter').value = '';
+                
+                searchTerm = '';
+                actionFilter = '';
+                statusFilter = '';
+                currentPage = 0; // 重置为第一页
+                
+                loadLogs();
+            });
+            
+            // 退出登录按钮
+            document.getElementById('adminLogoutBtn').addEventListener('click', function(e) {
+                e.preventDefault();
+                logout();
+            });
+        });
+    </script>
+</body>
+</html>
